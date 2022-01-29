@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 #from matplotlib.font_manager import FontProperties
 
 #================settings===================
-debug_mode=True # is debug_mode?
+debug_mode=False # is debug_mode?
 x_gain=13       # x gain parameter
-threshold=0.3   # divide between two points judge value
+threshold=0.4   # divide between two points judge value
 times=6         # while time (hour)
 
 def line_bot(message:str,images:any)->None:
@@ -119,12 +119,6 @@ class PressureReport():
         self.list_delta = []
         self.list_warning = []
         self.pressure_message = ""
-
-        # y-axis list
-        now = datetime.now()
-        for i in range(self.x_gain):
-            self.list_hours.append(f"{now.day}th {now.strftime('%#I%p')}")
-            now += timedelta(hours=3)
         
         # self.list_warning None List
         for i in range(self.x_gain):
@@ -142,7 +136,13 @@ class PressureReport():
                             1014, 1015, 1020, 1010, 1016, 1017, 1016, 1014, 1010]
             self.list_pressure = self.list_pressure[0:self.x_gain]
             print(f"pressure{self.list_pressure}")
-        self.pressure_message = f"now {self.list_pressure[0]}hPa\n\n"
+        
+        # y-axis list
+        now = datetime.fromtimestamp(list_wether_data[0]['dt'])
+        self.pressure_message = f"{now.strftime('%#dth%b %#I%p')} [{self.list_pressure[0]}hPa]\n\n"
+        for i in range(self.x_gain):
+            self.list_hours.append(f"{now.day}th {now.strftime('%#I%p')}")
+            now += timedelta(hours=3)
 
         # set y axis range
         ylim_mean = int(np.mean(self.list_pressure))
