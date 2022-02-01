@@ -154,8 +154,8 @@ class PressureReport():
         ylim_mean = int(np.mean(self.list_pressure))
         ylim_max = np.max(self.list_pressure)
         ylim_min = np.min(self.list_pressure)
-        ylim_top = ylim_mean+7
-        ylim_bottom = ylim_mean-7
+        ylim_top = ylim_mean+8
+        ylim_bottom = ylim_mean-8
         if ylim_max > ylim_top:
             ylim_top = ylim_max
         if ylim_min < ylim_bottom:
