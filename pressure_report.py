@@ -1,3 +1,4 @@
+from pickle import TRUE
 import requests
 import numpy as np
 import time
@@ -10,7 +11,7 @@ import matplotlib.pyplot as plt
 debug_mode=False # is debug_mode?
 x_gain=13       # x gain parameter
 threshold=0.4   # divide between two points judge value
-times=6         # while time (hour)
+times=8         # while time (hour)
 
 def line_bot(message:str,images:any)->None:
     """Send Line message function
@@ -79,39 +80,39 @@ class PressureReport():
         """    
         self.pressure_message += f" {self.list_hours[down_start_num]} => {self.list_hours[down_end_num]}\n [{self.list_warning[down_start_num]}hPa] => [{self.list_warning[down_end_num]}hPa] \n"
         list_plt = []
+        plt_start = down_start_num
+        plt_end = down_end_num
         for k in range(self.x_gain):
             if down_start_num <= k:
                 if down_end_num < k:
                     list_plt.append(None)
                 else:
-                    list_plt.append(self.list_pressure[k])
+                    if self.list_pressure[k] != self.list_pressure[k-1]:
+                        list_plt.append(self.list_pressure[k])
+                    else:
+                        list_plt.append(None)
+                        plt_end -= 1
             else:
                 list_plt.append(None)
         plt.plot(self.list_hours,list_plt,"r")
-        plt.axvspan( down_start_num,down_end_num,color = "r", alpha=0.1)
+        plt.axvspan(plt_start,plt_end,color = "r", alpha=0.1)
         return self.pressure_message
 
     def down_pressure_info(self)->None:
         """fetch down pressure report
         """
         #==========OpenWetherMapSeting===========
-        url = "https://community-open-weather-map.p.rapidapi.com/forecast"
-        querystring = {"q":"tokyo,japan"}
+        forecast_url = "https://community-open-weather-map.p.rapidapi.com/forecast"
+        forecast_querystring = {"q":"tokyo,japan"}
+
+        weather_url = "https://community-open-weather-map.p.rapidapi.com/weather"
+        weather_querystring = {"q":"Tokyo,japan"}
+        
         headers = {
             'x-rapidapi-key': "",
             'x-rapidapi-host': "community-open-weather-map.p.rapidapi.com"
             }
 
-        #japanese font setting
-        """
-        if self.debug_mode is not True:
-            font_path = "/usr/share/fonts/opentype/note/NotoSansMonoCJKjp-Regular.otf"
-            fp = FontProperties(fname=font_path)
-        else:
-            font_path = "C:\Windows\Fonts\meiryo.ttc"
-            fp = FontProperties(fname=font_path)
-        """
-        
         #reset parameters
         self.is_warning = False
         self.list_pressure = []
@@ -126,22 +127,27 @@ class PressureReport():
         
         # get pressure report from OpenWetherMap
         if self.debug_mode is not True:
-            response = requests.request("GET", url, headers=headers, params=querystring)
-            list_wether_data = response.json()["list"]
+            forecast_response = requests.request("GET", forecast_url, headers=headers, params=forecast_querystring)
+            weather_response = requests.request("GET", weather_url, headers=headers, params=weather_querystring)
+            list_weather_data = weather_response.json()
+            list_forecast_data = forecast_response.json()["list"]
             for i in range(self.x_gain):
-                self.list_pressure.append(list_wether_data[i]["main"]["pressure"])
+                self.list_pressure.append(list_forecast_data[i]["main"]["pressure"])
+            #print(self.list_pressure)
         else:
-            self.list_pressure = [1014, 1015, 1020, 1010, 1016, 1017, 1016, 1014, 1010,
-                            1014, 1015, 1020, 1010, 1016, 1017, 1016, 1014, 1010,
-                            1014, 1015, 1020, 1010, 1016, 1017, 1016, 1014, 1010]
+            self.list_pressure = [1013, 1020, 1014, 1018, 1018, 1019, 1019, 1018, 1017, 
+                            1019, 1011, 1021, 1012, 1016, 1017, 1016, 1014, 1010,
+                            1014, 1015, 1020, 1010, 1016, 1017, 1020, 1014, 1010]
             self.list_pressure = self.list_pressure[0:self.x_gain]
-            print(f"pressure{self.list_pressure}")
+            list_forecast_data = [{"dt":1643595326}]
+            list_weather_data = {"dt":1643595326, "main":{"temp":280.62,"feels_like":280.62,"temp_min":279.13,"temp_max":282.05,"pressure":1013,"humidity":31}}
+            #print(f"pressure{self.list_pressure}")
         
         # y-axis list
-        now = datetime.fromtimestamp(list_wether_data[0]['dt'])
-        self.pressure_message = f"{now.strftime('%#dth%b %#I%p')} [{self.list_pressure[0]}hPa]\n\n"
+        now = datetime.fromtimestamp(list_forecast_data[0]['dt'])
+        self.pressure_message = f"{datetime.fromtimestamp(list_weather_data['dt']).strftime('%-dth%b %-I%p')} [{list_weather_data['main']['pressure']}hPa]\n\n"
         for i in range(self.x_gain):
-            self.list_hours.append(f"{now.day}th {now.strftime('%#I%p')}")
+            self.list_hours.append(f"{now.day}th {now.strftime('%-I%p')}")
             now += timedelta(hours=3)
 
         # set y axis range
@@ -159,18 +165,27 @@ class PressureReport():
         plt.plot(self.list_hours,self.list_pressure)
         plt.grid()
         plt.ylim(ylim_bottom,ylim_top)
-        plt.xticks(rotation =45, fontsize=7)#, fontproperties=fp)
+        plt.xticks(rotation =45, fontsize=7)
 
-        # set 
+        # set list_warning
+        jadge_range = 4
         for i ,pressure in enumerate(self.list_pressure):
-            for j in range(2):
-                if i < len(self.list_pressure)-2:
+            for j in range(jadge_range):
+                if i+1+j < len(self.list_pressure):
+                    if pressure == self.list_pressure[i+1]:
+                        break
                     per = float(f"{pressure/self.list_pressure[i+1+j]*100-100:.3f}")
-                    self.list_delta.append(per)
                     if per > self.threshold:
                         self.is_warning = True
                         self.list_warning[i:i+1+j+1] = self.list_pressure[i:i+1+j+1]
+                    if i+1+j+1 < len(self.list_pressure):
+                        if self.list_pressure[i+1+j] <= self.list_pressure[i+1+j+1]:
+                            break
+                else:
+                    if self.debug_mode:print(f"{pressure} {len(self.list_pressure)}/{i}:{i+1+j+1}###")
+                    pass
         down_start_num,down_end_num = None,None
+        #print(self.list_warning)
         if self.debug_mode:print(f"warning {self.list_warning}")
 
         if self.is_warning:
