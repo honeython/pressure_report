@@ -1,3 +1,4 @@
+import json
 from pickle import TRUE
 import requests
 import numpy as np
@@ -12,6 +13,10 @@ debug_mode=False # is debug_mode?
 x_gain=13       # x gain parameter
 threshold=0.4   # divide between two points judge value
 times=8         # while time (hour)
+#community-open-weather-map's api key  https://api.rakuten.net/community/api/open-weather-map
+x_rapidapi_key = "your api key"
+#line token  https://notify-bot.line.me/
+line_token = 'your token'
 
 def line_bot(message:str,images:any)->None:
     """Send Line message function
@@ -23,8 +28,6 @@ def line_bot(message:str,images:any)->None:
     images : any
         plot imege
     """
-    #==========LineSetting===================
-    line_token = ''
     line_url = "https://notify-api.line.me/api/notify"
     line_headers = {'Authorization': 'Bearer ' + line_token}
     try:
@@ -36,6 +39,7 @@ def line_bot(message:str,images:any)->None:
         #logging.error('Line Error:' + str(e))
         print('Line Error:' + str(e))
         pass
+    
 class PressureReport():
     def __init__(self,debug_mode:bool, x_gain:int, threshold:float, times:int) -> None:
         """
@@ -60,7 +64,35 @@ class PressureReport():
         self.x_gain = x_gain
         self.threshold = threshold
         self.times = times
+
+    def fetch_report(self,report:str)->json:
+        """fetch any report json
+
+        Parameters
+        ----------
+        report : str
+            report name
+
+        Returns
+        -------
+        json
+            report json
+        """ 
+
+        if report == "forecast":
+            url = "https://community-open-weather-map.p.rapidapi.com/forecast"
+        elif report == "weather":
+            url = "https://community-open-weather-map.p.rapidapi.com/weather"
         
+        querystring = {"q":"Tokyo,japan"}
+        headers = {
+            'x-rapidapi-key': x_rapidapi_key,
+            'x-rapidapi-host': "community-open-weather-map.p.rapidapi.com"
+            }
+        
+        result = requests.request("GET", url, headers=headers, params=querystring).json()
+        return result
+
     def fetch_pressure_plt(self,down_start_num:int, down_end_num:int)-> str:
         """plot & return message
 
@@ -101,18 +133,6 @@ class PressureReport():
     def down_pressure_info(self)->None:
         """fetch down pressure report
         """
-        #==========OpenWetherMapSeting===========
-        forecast_url = "https://community-open-weather-map.p.rapidapi.com/forecast"
-        forecast_querystring = {"q":"tokyo,japan"}
-
-        weather_url = "https://community-open-weather-map.p.rapidapi.com/weather"
-        weather_querystring = {"q":"Tokyo,japan"}
-        
-        headers = {
-            'x-rapidapi-key': "",
-            'x-rapidapi-host': "community-open-weather-map.p.rapidapi.com"
-            }
-
         #reset parameters
         self.is_warning = False
         self.list_pressure = []
@@ -127,12 +147,10 @@ class PressureReport():
         
         # get pressure report from OpenWetherMap
         if self.debug_mode is not True:
-            forecast_response = requests.request("GET", forecast_url, headers=headers, params=forecast_querystring)
-            weather_response = requests.request("GET", weather_url, headers=headers, params=weather_querystring)
-            list_weather_data = weather_response.json()
-            list_forecast_data = forecast_response.json()["list"]
+            list_forecast_data = self.fetch_report("forecast")
+            list_weather_data = self.fetch_report("weather")
             for i in range(self.x_gain):
-                self.list_pressure.append(list_forecast_data[i]["main"]["pressure"])
+                self.list_pressure.append(list_forecast_data["list"][i]["main"]["pressure"])
             #print(self.list_pressure)
         else:
             self.list_pressure = [1013, 1020, 1014, 1018, 1018, 1019, 1019, 1018, 1017, 
@@ -144,7 +162,7 @@ class PressureReport():
             #print(f"pressure{self.list_pressure}")
         
         # y-axis list
-        now = datetime.fromtimestamp(list_forecast_data[0]['dt'])
+        now = datetime.fromtimestamp(list_forecast_data["list"][0]['dt'])
         self.pressure_message = f"{datetime.fromtimestamp(list_weather_data['dt']).strftime('%-dth%b %-I%p')} [{list_weather_data['main']['pressure']}hPa]\n\n"
         for i in range(self.x_gain):
             self.list_hours.append(f"{now.day}th {now.strftime('%-I%p')}")
